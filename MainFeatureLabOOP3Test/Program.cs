@@ -375,17 +375,168 @@ namespace MainFeatureLabOOP3Test
 
             int kword_num = 0;
 
+            int kword_num2 = 0;
+
+
+            Regex mlt_str_rgx = new Regex("\".*\"");
+            Regex sgl_str_rgx = new Regex("\'.*\'");
+            Regex fake_str_rgx = new Regex("\"");
+            Regex fake_sgl_str_rgx = new Regex("\'");
+
+
             //\b[=;*() ]* *(const|char|int|return)[=;*()\ ]+(?!"+)\b
+
+            bool next_line_str_flag = false;
 
             for (int i = 0; i < func_lines.Length; i++)
             {
-                var kw_mathes = kword_rgx.Matches(func_lines[i]);
-                if (kw_mathes.Count != 0)
-                    kword_num+=kw_mathes.Count;
-                foreach (Match sm in kw_mathes)
+                
+                var kw_matches = kword_rgx.Matches(func_lines[i]);
+                //if (kw_mathes.Count != 0)
+                //  kword_num+=kw_mathes.Count;
+                var test_str_matches = fake_str_rgx.Matches(func_lines[i]);
+                var test_sgl_str_matches = fake_sgl_str_rgx.Matches(func_lines[i]);
+
+
+                //1
+                if (test_str_matches.Count == 0 && next_line_str_flag == false && test_sgl_str_matches.Count==0)
                 {
-                    match_list.Add(sm.Value);
+                    kword_num += kw_matches.Count;
+                    Console.WriteLine("FIRST IF.This line add whole kwords = "+func_lines[i] + " " + next_line_str_flag.ToString());
+                    continue;
                 }
+                //1.HALF
+                else if (test_sgl_str_matches.Count % 2 == 0 && next_line_str_flag == false && test_sgl_str_matches.Count > 0)
+                {
+                    var sgl_str_matches = sgl_str_rgx.Matches(func_lines[i]);
+                    foreach (Match kw_match in kw_matches)
+                    {
+                        bool not_str_flag = true;
+                        foreach (Match sgl_str_match in sgl_str_matches)
+                        {
+                            //3.2
+                            if (kw_match.Index > sgl_str_match.Index && (kw_match.Index < (sgl_str_match.Index + sgl_str_match.Value.Length)))
+                            {
+                                not_str_flag = false;
+                                Console.WriteLine("1.HALF CLOSING COMMENT IN");
+                                break;
+                            }
+                        }
+                        //3.3
+                        if (not_str_flag)
+                        {
+                            kword_num++;
+                            Console.WriteLine("1.HALF .This line = " + func_lines[i]);
+                            continue;
+                        }
+                    }
+                }
+
+                //2
+                else if (test_str_matches.Count == 0 && next_line_str_flag == true)
+                {
+                    Console.WriteLine("GOT HERE");
+                    continue;
+                }
+
+                //3
+                else if (test_str_matches.Count % 2 == 0 && next_line_str_flag == false && test_str_matches.Count > 0 )
+                {
+                    var mlt_str_matches = mlt_str_rgx.Matches(func_lines[i]);
+                    var sgl_str_matches = sgl_str_rgx.Matches(func_lines[i]);
+
+                    foreach (Match kw_match in kw_matches)
+                    {
+                        bool not_str_flag = true;
+                        foreach (Match str_match in mlt_str_matches)
+                        {
+                            //3.1
+                            if (kw_match.Index > str_match.Index && (kw_match.Index < (str_match.Index + str_match.Value.Length)))
+                            {
+                                not_str_flag = false;
+                                Console.WriteLine("3.1  CLOSING COMMENT IN " + str_match.Index.ToString() + " "+ kw_match.Index.ToString());
+                                break;
+                            }
+                        }
+                        foreach (Match sgl_str_match in sgl_str_matches)
+                        {
+                            //3.2
+                            if (kw_match.Index > sgl_str_match.Index && (kw_match.Index < (sgl_str_match.Index + sgl_str_match.Value.Length)))
+                            {
+                                not_str_flag = false;
+                                Console.WriteLine("3.2 CLOSING COMMENT IN");
+                                break;
+                            }
+                        }
+                        //3.3
+                        if (not_str_flag)
+                        {
+                            kword_num++;
+                            Console.WriteLine("3.3 .This line = " + func_lines[i]);
+                            continue;
+                        }
+                    }
+
+                }
+                //4
+                else if (test_str_matches.Count % 2 == 1)
+                {
+                    //4.1
+                    if (test_str_matches.Count == 1 && next_line_str_flag == false)
+                    {
+                        foreach (Match kw_match in kw_matches)
+                        {
+                            bool good_kw = true;
+                            if (kw_match.Index > test_str_matches[0].Index)
+                            {
+                                good_kw = false;
+                            }
+                            //4.1.1
+                            if (good_kw)
+                            {
+                                kword_num++;
+                                Console.WriteLine("4.1.1  This line = " + func_lines[i]);
+                                continue;
+                            }
+                        }
+                        //4.1.2
+                        if (func_lines[i][func_lines[i].Length - 1] == '\\')
+                        {
+                            next_line_str_flag = true;
+                            Console.WriteLine("4.1.2  Opened\\continued comment ");
+                        }
+                    }
+                    //4.2
+                    else if (test_str_matches.Count == 1 && next_line_str_flag == true)
+                    {
+                        foreach (Match kw_match in kw_matches)
+                        {
+                            bool good_kw = true;
+                            if (kw_match.Index < test_str_matches[0].Index)
+                            {
+                                good_kw = false;
+                            }
+                            //4.2.1
+                            if (good_kw)
+                            {
+                                kword_num++;
+                                Console.WriteLine("4.2.1  This line = " + func_lines[i]);
+                                continue;
+                            }
+                        }
+                        //4.2.2
+                        if (func_lines[i][func_lines[i].Length - 1] != '\\')
+                        {
+                            next_line_str_flag = false;
+                            Console.WriteLine("4.2.2  closed comment ");
+                        }
+
+                    }
+
+                }
+
+
+
             }
 
             for (int i = 0; i < match_list.Count; i++)
@@ -398,13 +549,19 @@ namespace MainFeatureLabOOP3Test
             Match ft_match = kword_rgx.Match(func_type);
 
             if (ft_match.Success && ft_match.Index == 0)
+            {
                 kword_num++;
+                kword_num2++;
+            }
 
             var param_match = kword_rgx.Matches(func_params);
-            if (param_match.Count!=0)
-                kword_num+= param_match.Count;
+            if (param_match.Count != 0)
+            { 
+                kword_num += param_match.Count;
+                kword_num2 += param_match.Count;
+            }
 
-            string test_message = string.Format(CultureInfo.CurrentCulture, "for this func {0} found next line of lines - {1}, useful between them - {5} ,  keywords - {6},\n {3} testing {4} \nit contains next code:\n{2}", func_name, line_counter, func_body, body_start, cur_pos, usfl_lines,kword_num);
+            string test_message = string.Format(CultureInfo.CurrentCulture, "for this func {0} found next line of lines - {1}, useful between them - {5} ,  keywords - 1st var - {6}  2nd var - {7},\n {3} testing {4} \nit contains next code:\n{2}", func_name, line_counter, func_body, body_start, cur_pos, usfl_lines,kword_num, kword_num2);
             result_struct.SetInfo(line_counter, usfl_lines);
             Console.WriteLine(test_message);
                 
