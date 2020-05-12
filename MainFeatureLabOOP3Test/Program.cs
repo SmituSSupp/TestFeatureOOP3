@@ -2,6 +2,9 @@
 using System.IO;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using System.Collections.Generic;
+using System.Linq;
+
 namespace MainFeatureLabOOP3Test
 {
     class Program
@@ -22,27 +25,19 @@ namespace MainFeatureLabOOP3Test
 
 
             
-            Console.WriteLine("Preparations");
+            
             int foo = 0;
             bool flag_r = false;
             bool quotes = false;
             bool in_comment = false;
 
-            while (text[foo] != '\r' && text[foo+1]!= '\n')
-            {
-                //Console.WriteLine(text[foo]);
-                Console.WriteLine(foo);
-                foo++;
-            }
-            
+
             Console.WriteLine("newPart");
             Regex rx = new Regex(@"(\S+)\s*(\S+)\s*\((?!\!)(?!\?).*\)\r*\n* *\{");
             Regex multiline_start_rx1 = new Regex(@"\/\*[^,*/]*");
             Regex multiline_end_rx1 = new Regex(@"\*\/");
             Regex one_line_rx1 = new Regex(@"\/\/.*(\\)*");
             //Regex full_str_rx1 = new Regex(".*[^\\]\"");
-
-            
 
             var result = text.Split("\r\n", StringSplitOptions.None);
 
@@ -72,7 +67,6 @@ namespace MainFeatureLabOOP3Test
                     
                 }
 
-
                 quote_pos = result[string_pos].IndexOf('"');
                 Match match_one_line = Regex.Match(result[string_pos], one_line_rx);
                 Match match_multiline_start = Regex.Match(result[string_pos], multiline_start_rx);
@@ -80,11 +74,9 @@ namespace MainFeatureLabOOP3Test
                 int one_line_pos = ((match_one_line.Success) ? match_one_line.Index : -1);
                 int multiline_start_pos = ((match_multiline_start.Success) ? match_multiline_start.Index : -1);
                 int multiline_end_pos = ((match_multiline_end.Success) ? match_multiline_end.Index : -1);
-                
-                
+                     
                 //Console.WriteLine(result[string_pos]);
                 //Console.WriteLine(one_line_pos);
-
 
                 if (one_line_pos != -1 && multiline_start_pos == -1 && multiline_end_pos == -1 )
                 {
@@ -231,17 +223,27 @@ namespace MainFeatureLabOOP3Test
             Console.WriteLine("zaebok");
             Console.WriteLine(new_text);
             Regex parse_functions = new Regex(@"([_a-zA-Z0-9*]+)\s*\**\s*([a-zA-Z0-9*]+)\s*\((.*\n*)*?.*\)\s*\n*\s*\{");
+            Regex parse_params = new Regex(@"\((.*\n*)*\)");
+
 
             foreach (Match match in parse_functions.Matches(new_text))
             {
                 int index = match.Index;
                 string matched_str = match.Value;
                 string func_name = match.Groups[2].Value;
-                string test_message = string.Format(CultureInfo.CurrentCulture, "MATCHED STRING: {0}\n POSITION {1}\n FUNC_NAME {2}", matched_str, index, func_name);
+                string func_type = match.Groups[1].Value;
+                string func_params = match.Groups[3].Value;
 
-                var test = ParseFuncMethod(new_text, index, func_name);
+                var param_f = parse_params.Match(matched_str);
+
+                string test_message = string.Format(CultureInfo.CurrentCulture, "MATCHED STRING: {0}\n POSITION {1}\n FUNC_NAME {2}  params ({3})", matched_str, index, func_name, param_f.Value);
+
+                
+
+                var test = ParseFuncMethod(new_text, index, func_name,func_type,param_f.Value);
                 Console.WriteLine("___");
                 test.ShowFuncInfo();
+                Console.WriteLine(test_message);
                 Console.WriteLine("___");
             }
         }
@@ -283,7 +285,7 @@ namespace MainFeatureLabOOP3Test
             }
         }
 
-        public static FuncMethodInfo ParseFuncMethod(string code_text, int start_index, string func_name)
+        public static FuncMethodInfo ParseFuncMethod(string code_text, int start_index, string func_name, string func_type,string func_params)
         {
             FuncMethodInfo result_struct = new FuncMethodInfo(func_name);
 
@@ -350,9 +352,59 @@ namespace MainFeatureLabOOP3Test
                 line_counter = 0;
             }
 
+            
 
+            List<string> KeyWords = new List<string>()  {
+                           "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand",
+                           "bitor", "bool", "break", "case", "catch", "char", "char16_t",
+                           "char32_t", "class", "compl", "const", "constexpr", "const_cast",
+                           "continue", "decltype", "default", "delete", "do", "double", "dynamic_cast",
+                           "else", "enum", "explicit", "export", "extern", "false", "float", "for",
+                           "friend", "goto", "if", "inline", "int", "long", "mutable", "namespace",
+                           "new", "noexcept", "not", "not_eq", "nullptr", "operator", "or", "or_eq",
+                           "private", "protected", "public", "register", "reinterpret_cast", "return",
+                           "short", "signed", "sizeof", "static", "static_assert", "static_cast",
+                           "struct", "switch", "template", "this", "thread_local", "throw", "true",
+                           "try", "typedef", "typeid", "typename", "union", "unsigned", "using",
+                           "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq"
+                           };
 
-            string test_message = string.Format(CultureInfo.CurrentCulture, "for this func {0} found next line of lines - {1}, useful between them - {5},\n {3} testing {4} \nit contains next code:\n{2}", func_name, line_counter, func_body, body_start, cur_pos, usfl_lines);
+            Regex kword_rgx = new Regex(@"\b(" + string.Join("|", KeyWords.Select(Regex.Escape).ToArray()) + @"\b)");
+
+            List<string> match_list = new List<string>();
+
+            int kword_num = 0;
+
+            //\b[=;*() ]* *(const|char|int|return)[=;*()\ ]+(?!"+)\b
+
+            for (int i = 0; i < func_lines.Length; i++)
+            {
+                var kw_mathes = kword_rgx.Matches(func_lines[i]);
+                if (kw_mathes.Count != 0)
+                    kword_num+=kw_mathes.Count;
+                foreach (Match sm in kw_mathes)
+                {
+                    match_list.Add(sm.Value);
+                }
+            }
+
+            for (int i = 0; i < match_list.Count; i++)
+            {
+                Console.WriteLine(match_list[i]);
+            }
+
+            Console.WriteLine(match_list.ToString());
+
+            Match ft_match = kword_rgx.Match(func_type);
+
+            if (ft_match.Success && ft_match.Index == 0)
+                kword_num++;
+
+            var param_match = kword_rgx.Matches(func_params);
+            if (param_match.Count!=0)
+                kword_num+= param_match.Count;
+
+            string test_message = string.Format(CultureInfo.CurrentCulture, "for this func {0} found next line of lines - {1}, useful between them - {5} ,  keywords - {6},\n {3} testing {4} \nit contains next code:\n{2}", func_name, line_counter, func_body, body_start, cur_pos, usfl_lines,kword_num);
             result_struct.SetInfo(line_counter, usfl_lines);
             Console.WriteLine(test_message);
                 
